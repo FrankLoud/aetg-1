@@ -48,8 +48,6 @@ unsigned inline hash(unsigned fl1, unsigned fl2)
 
 int inline compare(unsigned fl1_a, unsigned fl2_a, unsigned fl1_b, unsigned fl2_b)
 {
-    int i;
-
     if (((fl1_a == fl1_b && fl2_a == fl2_b) || (fl1_a == fl2_b && fl2_a == fl1_b))
         && fl1_a != fl2_a && fl1_b != fl2_b)
         return 1;
@@ -390,7 +388,7 @@ int main(int argc, char *argv[])
 
     unsigned uncovered, tests=0;
 
-    printf("Pairs to cover:      %9d\n", max_pairs);
+    printf("Pairs to cover:      %9ld\n", max_pairs);
     printf("Generating test set:                        ");
     while((uncovered=count_uncovered()) > 0)
     {
