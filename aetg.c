@@ -374,6 +374,11 @@ void parse_cmdline(int argc, char *argv[])
     printf("Output file: %s\n\n", output_fname);
 }
 
+int cmpfunc (const void * a, const void * b)
+{
+   return ( *(unsigned*)a - *(unsigned*)b );
+}
+
 int main(int argc, char *argv[])
 {
     parse_cmdline(argc, argv);
@@ -395,9 +400,10 @@ int main(int argc, char *argv[])
         printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%7.3f%%  %5d tests", 100.-((float)count_uncovered()/2)/max_pairs*100., tests);
         fflush(stdout);
 
+        qsort(test, factors, sizeof(unsigned), cmpfunc);
+
         for(int i = 0; i < factors; ++i)
-             fprintf(f, "%d, ", test[i]);
-        fprintf(f,"\n");
+             fprintf(f, "%d%s", test[i] % levels, (i<factors-1)?", ":"\n");
     }
     printf("\n");
     fclose(f);
