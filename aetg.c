@@ -3,10 +3,13 @@
 #include <assert.h>
 #include <time.h>
 #include <stdbool.h>
+#include <getopt.h>
+#include <string.h>
 
 int factors=60;
 int levels=60;
 unsigned long max_pairs=0;
+char output_fname[256] = "aetg.txt";
 
 // 32 kB tables
 #define HASHTABLE_BUCKETS   (1024*32768)
@@ -166,7 +169,7 @@ void hashtable_list()
 
 void generate_pairs()
 {
-    printf("Generating pairs      ");
+    printf("Generating pairs:              ");
     for(int i = 0; i < factors; ++i)
     {
         for(int j = 0; j < levels; ++j)
@@ -329,23 +332,67 @@ unsigned count_uncovered()
     return n;
 }
 
+void usage()
+{
+    printf("Usage: \n");
+    printf("    aetg [options] FACTOR LEVELS\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("    -h          Show this usage message\n");
+    printf("    -f FILE     Write results to FILE [default: aetg.txt]\n");
+}
+
+void parse_cmdline(int argc, char *argv[])
+{
+    int c;
+
+    while((c = getopt (argc, argv, "f:h::")) != -1)
+    {
+        switch(c)
+        {
+        case 'h': usage(); exit(0);
+        case 'f':
+            strncpy(output_fname, optarg, 256);
+            break;
+        default:
+            printf("Unknown option\n");
+            usage();
+            exit(1);
+        }
+    }
+
+    if(optind > argc - 2)
+    {
+        usage();
+        exit(1);
+    }
+
+    factors = atoi(argv[optind]);
+    levels = atoi(argv[optind+1]);
+    printf("Factors:     %d\n", factors);
+    printf("Levels:      %d\n", levels);
+    printf("Output file: %s\n\n", output_fname);
+}
+
 int main(int argc, char *argv[])
 {
-    FILE *f = fopen("aetg.txt","w");
+    parse_cmdline(argc, argv);
 
+    FILE *f = fopen(output_fname,"w");
     srand(time(NULL));
-
     hashtable_init(factors*levels);
-
     generate_pairs();
 
-    unsigned uncovered;
+    unsigned uncovered, tests=0;
 
+    printf("Pairs to cover:      %9d\n", max_pairs);
+    printf("Generating test set:                        ");
     while((uncovered=count_uncovered()) > 0)
     {
         unsigned *test = construct_row();
+        tests++;
 
-        printf("\b\b\b\b\b\b\b\b%3.4f%%", 100.-((float)count_uncovered()/2)/max_pairs*100.);
+        printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b%7.3f%%  %5d tests", 100.-((float)count_uncovered()/2)/max_pairs*100., tests);
         fflush(stdout);
 
         for(int i = 0; i < factors; ++i)
