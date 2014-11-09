@@ -8,6 +8,7 @@
 
 int factors=60;
 int levels=60;
+int pair_coverage=1;
 unsigned long max_pairs=0;
 char output_fname[256] = "aetg.txt";
 
@@ -16,6 +17,7 @@ char output_fname[256] = "aetg.txt";
 
 struct hashtable_entry_t {
   unsigned fl1, fl2;
+  unsigned n;
   struct hashtable_entry_t *next;
 };
 
@@ -35,6 +37,7 @@ void hashtable_init(unsigned max_val)
     {
         hashtable.table[i].fl1 = 0;
         hashtable.table[i].fl2 = 0;
+        hashtable.table[i].n = 0;
         hashtable.table[i].next = NULL;
     }
 
@@ -55,7 +58,7 @@ int inline compare(unsigned fl1_a, unsigned fl2_a, unsigned fl1_b, unsigned fl2_
     return 0;
 }
 
-void hashtable_insert(unsigned fl1, unsigned fl2)
+void hashtable_insert(unsigned fl1, unsigned fl2, unsigned coverage)
 {
     unsigned h = hash(fl1, fl2);
     hashtable_entry *e = &hashtable.table[h];
@@ -71,10 +74,11 @@ void hashtable_insert(unsigned fl1, unsigned fl2)
             e = e->next;
             e->fl1 = fl1;
             e->fl2 = fl2;
+            e->n = coverage;
             e->next = NULL;
 
-            hashtable.value_counts[fl1]++;
-            hashtable.value_counts[fl2]++;
+            hashtable.value_counts[fl1] += coverage;
+            hashtable.value_counts[fl2] += coverage;
 
             return;
         }
@@ -92,7 +96,7 @@ int hashtable_find(unsigned fl1, unsigned fl2)
     {
         if (compare(fl1, fl2, e->fl1, e->fl2))
         {
-          return 1;
+          return e->n;
         }
 
         if(!e->next)
@@ -116,6 +120,10 @@ int hashtable_remove(unsigned fl1, unsigned fl2)
         {
             hashtable.value_counts[e->fl1]--;
             hashtable.value_counts[e->fl2]--;
+            e->n--;
+            if(e->n > 0)
+                return 1;
+
             if(prev == NULL)
             {
                 if(e->next == NULL)
@@ -127,6 +135,8 @@ int hashtable_remove(unsigned fl1, unsigned fl2)
                 {
                     e->fl1 = e->next->fl1;
                     e->fl2 = e->next->fl2;
+                    e->n = e->next->n;
+
                     prev = e->next;
                     e->next = e->next->next;
                     free(prev);
@@ -165,7 +175,56 @@ void hashtable_list()
     }
 }
 
-void generate_pairs()
+typedef struct list_t {
+    unsigned *tests;
+    struct list_t *next;
+} test_list;
+
+test_list *head = NULL;
+
+void add_tests(unsigned *tests)
+{
+    test_list *n;
+
+    if(!head)
+    {
+        head = calloc(1, sizeof(test_list));
+        n = head;
+    }
+    else
+    {
+        n = head;
+
+        while(n->next)
+        {
+            n = n->next;
+        }
+
+        n->next = calloc(1, sizeof(test_list));
+        n = n->next;
+    }
+
+    n->tests = tests;
+}
+
+int find_tests(unsigned *tests)
+{
+    test_list *n = head;
+
+    while(n)
+    {
+        if(n->tests)
+        {
+            if(memcmp(n->tests, tests, sizeof(unsigned)*factors) == 0)
+                return 1;
+        }
+        n = n->next;
+    }
+
+    return 0;
+}
+
+void generate_pairs(int coverage)
 {
     printf("Generating pairs:              ");
     for(int i = 0; i < factors; ++i)
@@ -177,8 +236,8 @@ void generate_pairs()
                     unsigned fl1 = i * levels + j;
                     unsigned fl2 = f * levels + l;
 
-                    hashtable_insert(fl1, fl2);
-                    max_pairs ++;
+                    hashtable_insert(fl1, fl2, coverage);
+                    max_pairs += coverage;
                 }
         printf("\b\b\b\b%3d%%",(int)((float) (i+1) / factors * 100.));
         fflush(stdout);
@@ -298,7 +357,14 @@ unsigned *construct_row()
     #pragma omp parallel for schedule(guided) shared(hashtable)
     for(int i = 0; i < M; ++i)
     {
-        tests[i] = construct_candidate(mx);
+        // Keep constructing candidates until we have one we have a
+        // unique one. We very rarely construct duplicates.
+        do
+        {
+            tests[i] = construct_candidate(mx);
+        }
+        while(find_tests(tests[i]));
+
         covered[i] = n_covered(tests[i]);
     }
 
@@ -317,6 +383,7 @@ unsigned *construct_row()
 
     remove_covered(tests[max]);
 
+    add_tests(tests[max]);
     return tests[max];
 }
 
@@ -338,19 +405,27 @@ void usage()
     printf("Options:\n");
     printf("    -h          Show this usage message\n");
     printf("    -f FILE     Write results to FILE [default: aetg.txt]\n");
+    printf("    -c PAIRS    Number of times to cover each pair [default: 1]\n");
 }
 
 void parse_cmdline(int argc, char *argv[])
 {
     int c;
 
-    while((c = getopt (argc, argv, "f:h::")) != -1)
+    while((c = getopt (argc, argv, "f:c:h::")) != -1)
     {
         switch(c)
         {
         case 'h': usage(); exit(0);
         case 'f':
             strncpy(output_fname, optarg, 256);
+        case 'c':
+            pair_coverage = atoi(optarg);
+            if(pair_coverage <= 0)
+            {
+                printf("Argument to -c must be a positive integer\n");
+                exit(1);
+            }
             break;
         default:
             printf("Unknown option\n");
@@ -367,9 +442,10 @@ void parse_cmdline(int argc, char *argv[])
 
     factors = atoi(argv[optind]);
     levels = atoi(argv[optind+1]);
-    printf("Factors:     %d\n", factors);
-    printf("Levels:      %d\n", levels);
-    printf("Output file: %s\n\n", output_fname);
+    printf("Factors:        %d\n", factors);
+    printf("Levels:         %d\n", levels);
+    printf("Pair coverage:  %d\n", pair_coverage);
+    printf("Output file:    %s\n\n", output_fname);
 }
 
 int cmpfunc (const void * a, const void * b)
@@ -384,7 +460,7 @@ int main(int argc, char *argv[])
     FILE *f = fopen(output_fname,"w");
     srand(time(NULL));
     hashtable_init(factors*levels);
-    generate_pairs();
+    generate_pairs(pair_coverage);
 
     unsigned uncovered, tests=0;
 
