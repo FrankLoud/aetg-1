@@ -404,13 +404,14 @@ void usage()
     printf("\n");
     printf("Options:\n");
     printf("    -h          Show this usage message\n");
-    printf("    -f FILE     Write results to FILE [default: aetg.txt]\n");
+    printf("    -f FILE     Write results to FILE [default: aetg_fX_lX_cX.txt]\n");
     printf("    -c PAIRS    Number of times to cover each pair [default: 1]\n");
 }
 
 void parse_cmdline(int argc, char *argv[])
 {
     int c;
+    bool f_flag = false;
 
     while((c = getopt (argc, argv, "f:c:h::")) != -1)
     {
@@ -419,6 +420,8 @@ void parse_cmdline(int argc, char *argv[])
         case 'h': usage(); exit(0);
         case 'f':
             strncpy(output_fname, optarg, 256);
+            f_flag = true;
+            break;
         case 'c':
             pair_coverage = atoi(optarg);
             if(pair_coverage <= 0)
@@ -442,6 +445,10 @@ void parse_cmdline(int argc, char *argv[])
 
     factors = atoi(argv[optind]);
     levels = atoi(argv[optind+1]);
+
+    if(!f_flag)
+        sprintf(output_fname, "aetg_f%d_l%d_c%d.txt", factors, levels, pair_coverage);
+
     printf("Factors:        %d\n", factors);
     printf("Levels:         %d\n", levels);
     printf("Pair coverage:  %d\n", pair_coverage);
